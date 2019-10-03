@@ -17,6 +17,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/node": "^12.7.9",
     "concurrently": "^4.1.2",
     "nodemon": "^1.19.3",
     "prettier": "^1.18.2",
@@ -24,5 +25,13 @@
     "ts-node": "^8.4.1",
     "typescript": "^3.6.3",
     "wait-on": "^3.3.0"
+  },
+  "dependencies": {
+    "@apollo/federation": "^0.10.0",
+    "@apollo/gateway": "^0.10.5",
+    "apollo-server": "^2.9.4",
+    "graphql-tools": "^4.0.5",
+    "graphql-transform-federation": "^2.0.0",
+    "swagger-to-graphql": "^4.0.2"
   }
 }
