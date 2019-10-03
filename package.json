@@ -4,9 +4,25 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "format": "prettier --check '**/*.{js,ts,json,md}'",
+    "format:fix": "prettier --write '**/*.{js,ts,json,md}'",
+    "start:watch": "nodemon --signal SIGINT -e ts,js -x npm run start",
+    "start": "concurrently 'npm run start:gateway' 'npm run start:swagger-server' 'npm run start:comments-server'",
+    "start:gateway": "wait-on tcp:4001 && wait-on tcp:4002 && ts-node src/gateway",
+    "start:swagger-server": "ts-node src/swagger-server",
+    "start:comments-server": "ts-node src/comments-server"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^4.1.2",
+    "nodemon": "^1.19.3",
+    "prettier": "^1.18.2",
+    "rimraf": "^3.0.0",
+    "ts-node": "^8.4.1",
+    "typescript": "^3.6.3",
+    "wait-on": "^3.3.0"
+  }
 }
