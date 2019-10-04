@@ -1,71 +1,78 @@
 import { delegateToSchema, makeExecutableSchema } from 'graphql-tools';
 import { ApolloServer } from 'apollo-server';
 import { transformSchemaFederation } from 'graphql-transform-federation';
+import createSchema, { CallBackendArguments } from 'swagger-to-graphql';
+import fetch from 'node-fetch';
+import { URLSearchParams } from 'url';
 
-const products = [
-  {
-    id: '123',
-    name: 'name from transformed service',
-  },
-];
+function getBodyAndHeaders(
+  body: any,
+  bodyType: 'json' | 'formData',
+  headers: { [key: string]: string } | undefined,
+) {
+  if (!body) {
+    return { headers };
+  }
 
-interface ProductKey {
-  id: string;
+  if (bodyType === 'json') {
+    return {
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+      body: JSON.stringify(body),
+    };
+  }
+
+  return {
+    headers,
+    body: new URLSearchParams(body),
+  };
 }
 
-const schemaWithoutFederation = makeExecutableSchema({
-  typeDefs: `
-    type Product {
-      id: String!
-      name: String!
-    }
-    
-    type Query {
-      productById(id: String!): Product!
-    }
-  `,
-  resolvers: {
-    Query: {
-      productById(source, { id }: ProductKey) {
-        return products.find(product => product.id === id);
-      },
-    },
-  },
-});
+async function callBackend({
+  requestOptions: { method, body, baseUrl, path, query, headers, bodyType },
+}: CallBackendArguments<{}>) {
+  const searchPath = query ? `?${new URLSearchParams(query)}` : '';
+  const url = `${baseUrl}${path}${searchPath}`;
+  const bodyAndHeaders = getBodyAndHeaders(body, bodyType, headers);
 
-const federationSchema = transformSchemaFederation(schemaWithoutFederation, {
-  Query: {
-    extend: true,
-  },
-  Product: {
-    extend: true,
-    keyFields: ['id'],
-    fields: {
-      id: {
-        external: true,
-      },
-    },
-    resolveReference(reference, context: { [key: string]: any }, info) {
-      return delegateToSchema({
-        schema: info.schema,
-        operation: 'query',
-        fieldName: 'productById',
-        args: {
-          id: (reference as ProductKey).id,
-        },
-        context,
-        info,
-      });
-    },
-  },
-});
-
-new ApolloServer({
-  schema: federationSchema,
-})
-  .listen({
-    port: 4001,
-  })
-  .then(({ url }) => {
-    console.log(`🚀 Transformed server ready at ${url}`);
+  const response = await fetch(url, {
+    method,
+    ...bodyAndHeaders,
   });
+
+  const text = await response.text();
+  if (response.ok) {
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return text;
+    }
+  }
+  throw new Error(`Response: ${response.status} - ${text}`);
+}
+
+(async function main() {
+  const schemaWithoutFederation = await createSchema({
+    swaggerSchema: 'https://petstore.swagger.io/v2/swagger.json',
+    callBackend,
+  });
+
+  const federationSchema = transformSchemaFederation(schemaWithoutFederation, {
+    Query: {
+      extend: true,
+    },
+    Pet: {
+      keyFields: ['id'],
+    },
+  });
+
+  const { url } = await new ApolloServer({
+    schema: federationSchema,
+  }).listen({
+    port: 4001,
+  });
+
+  console.log(`🚀 Swagger server ready at ${url}`);
+})();

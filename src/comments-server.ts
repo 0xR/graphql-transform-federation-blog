@@ -1,45 +1,97 @@
-import { ApolloServer, gql, ServerInfo } from 'apollo-server';
-import { buildFederatedSchema } from '@apollo/federation';
+import {
+  ApolloServer,
+  delegateToSchema,
+  gql,
+  makeExecutableSchema,
+  ServerInfo,
+} from 'apollo-server';
+import {
+  GraphQLSchema,
+  GraphQLObjectType,
+  GraphQLString,
+  FieldNode,
+} from 'graphql';
+import { transformSchemaFederation } from 'graphql-transform-federation';
 
 const typeDefs = gql`
-  type Product @key(fields: "id") {
-    id: String!
-    price: Int
-    weight: Int
+  type Comment {
+    title: String!
+    body: String!
   }
 
   type Query {
-    findProduct: Product!
+    getCommentsForPet(petId: String!): [Comment!]!
   }
 `;
 
-interface ProductKey {
-  id: String;
+interface ProductReference {
+  id: string;
 }
 
-const product = {
-  id: '123',
-  price: 899,
-  weight: 100,
-};
-
-const resolvers = {
-  Query: {
-    findProduct() {
-      return product;
+const executableSchemaConfig = makeExecutableSchema({
+  typeDefs,
+  resolvers: {
+    Query: {
+      getCommentsForPet(source, { petId }) {
+        return [
+          {
+            title: `comment title ${petId}`,
+            body: `comment body ${petId}`,
+          },
+        ];
+      },
     },
   },
-};
+}).toConfig();
+
+if (!executableSchemaConfig.query) {
+  throw new Error('Schema should have a query type');
+}
+
+const schemaWithPetType = new GraphQLSchema({
+  ...executableSchemaConfig,
+  types: [
+    ...executableSchemaConfig.types,
+    new GraphQLObjectType({
+      name: 'Pet',
+      fields: {
+        id: { type: GraphQLString },
+        comments: {
+          type: executableSchemaConfig.query.getFields().getCommentsForPet.type,
+          resolve(source, context, args, info) {
+            return delegateToSchema({
+              schema: info.schema,
+              operation: 'query',
+              fieldName: 'getCommentsForPet',
+              args: {
+                petId: source.id,
+              },
+              context,
+              info,
+            });
+          },
+        },
+      },
+    }),
+  ],
+});
+
+const federatedSchema = transformSchemaFederation(schemaWithPetType, {
+  Pet: {
+    extend: true,
+    keyFields: ['id'],
+    fields: {
+      id: {
+        external: true,
+      },
+    },
+  },
+});
 
 const server = new ApolloServer({
-  schema: buildFederatedSchema([
-    {
-      typeDefs,
-      resolvers,
-    },
-  ]),
+  schema: federatedSchema,
 });
 
 server.listen({ port: 4002 }).then(({ url }: ServerInfo) => {
-  console.log(`🚀 Federation server ready at ${url}`);
+  console.log(`🚀 Comments server ready at ${url}`);
 });
