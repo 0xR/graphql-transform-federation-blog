@@ -60,9 +60,6 @@ async function callBackend({
   });
 
   const federationSchema = transformSchemaFederation(schemaWithoutFederation, {
-    Query: {
-      extend: true,
-    },
     Pet: {
       keyFields: ['id'],
     },

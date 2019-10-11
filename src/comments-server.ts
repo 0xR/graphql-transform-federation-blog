@@ -5,12 +5,6 @@ import {
   makeExecutableSchema,
   ServerInfo,
 } from 'apollo-server';
-import {
-  GraphQLSchema,
-  GraphQLObjectType,
-  GraphQLString,
-  FieldNode,
-} from 'graphql';
 import { transformSchemaFederation } from 'graphql-transform-federation';
 
 const typeDefs = gql`
@@ -19,64 +13,40 @@ const typeDefs = gql`
     body: String!
   }
 
+  type Pet {
+    id: String
+    comments: [Comment!]!
+  }
+
   type Query {
-    getCommentsForPet(petId: String!): [Comment!]!
+    getPetWithCommentsById(petId: String!): Pet
   }
 `;
 
-interface ProductReference {
+interface PetReference {
   id: string;
 }
 
-const executableSchemaConfig = makeExecutableSchema({
+const executableSchema = makeExecutableSchema({
   typeDefs,
   resolvers: {
     Query: {
-      getCommentsForPet(source, { petId }) {
-        return [
-          {
-            title: `comment title ${petId}`,
-            body: `comment body ${petId}`,
-          },
-        ];
+      getPetWithCommentsById(source, { petId }) {
+        return {
+          id: petId,
+          comments: [
+            {
+              title: `comment title ${petId}`,
+              body: `comment body ${petId}`,
+            },
+          ],
+        };
       },
     },
   },
-}).toConfig();
-
-if (!executableSchemaConfig.query) {
-  throw new Error('Schema should have a query type');
-}
-
-const schemaWithPetType = new GraphQLSchema({
-  ...executableSchemaConfig,
-  types: [
-    ...executableSchemaConfig.types,
-    new GraphQLObjectType({
-      name: 'Pet',
-      fields: {
-        id: { type: GraphQLString },
-        comments: {
-          type: executableSchemaConfig.query.getFields().getCommentsForPet.type,
-          resolve(source, context, args, info) {
-            return delegateToSchema({
-              schema: info.schema,
-              operation: 'query',
-              fieldName: 'getCommentsForPet',
-              args: {
-                petId: source.id,
-              },
-              context,
-              info,
-            });
-          },
-        },
-      },
-    }),
-  ],
 });
 
-const federatedSchema = transformSchemaFederation(schemaWithPetType, {
+const federatedSchema = transformSchemaFederation(executableSchema, {
   Pet: {
     extend: true,
     keyFields: ['id'],
@@ -84,6 +54,18 @@ const federatedSchema = transformSchemaFederation(schemaWithPetType, {
       id: {
         external: true,
       },
+    },
+    resolveReference(reference, context: { [key: string]: any }, info) {
+      return delegateToSchema({
+        schema: info.schema,
+        operation: 'query',
+        fieldName: 'getPetWithCommentsById',
+        args: {
+          petId: (reference as PetReference).id,
+        },
+        context,
+        info,
+      });
     },
   },
 });
