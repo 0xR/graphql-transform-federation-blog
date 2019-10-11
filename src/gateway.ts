@@ -1,4 +1,5 @@
 import { ServerInfo } from 'apollo-server';
+import { playgroundOptions } from './playground-options';
 
 const { ApolloServer } = require('apollo-server');
 const { ApolloGateway } = require('@apollo/gateway');
@@ -13,7 +14,11 @@ const gateway = new ApolloGateway({
 (async () => {
   const { schema, executor } = await gateway.load();
 
-  const server = new ApolloServer({ schema, executor });
+  const server = new ApolloServer({
+    schema,
+    executor,
+    playground: playgroundOptions,
+  });
 
   server.listen().then(({ url }: ServerInfo) => {
     console.log(`🚀 Gateway ready at ${url}`);
